@@ -5,88 +5,51 @@ import theano
 import os
 import argparse
 from collections import defaultdict
-from lasagne_utils import save_model, store_in_log, load_model, load_log, replace_updates_nans_with_zero, ExponentialUniformInit, non_flattening_dense
+from lasagne_utils import save_model, store_in_log, load_model, load_log, \
+                          ExponentialUniformInit, non_flattening_dense, get_layer_output_fn
 import theano.tensor as T
 import numpy as np
 from plstm import PLSTMLayer, PLSTMTimeGate
 from bnlstm import LSTMWBNLayer
-
-# Remove these:
 from lasagne.layers.recurrent import Gate
-from lasagne import nonlinearities
-from lasagne import init
 
-def non_flattening_dense(l_in, batch_size, seq_len, *args, **kwargs):
-    # Flatten down the dimensions for everything but the features
-    l_flat = lasagne.layers.ReshapeLayer(l_in, (-1, [2]))
-    # Make a dense layer connected to it
-    l_dense = lasagne.layers.DenseLayer(l_flat, *args, **kwargs)
-    # Reshape it back out
-    l_reshaped = lasagne.layers.ReshapeLayer(l_dense, (batch_size, seq_len, l_dense.output_shape[1]))
-    return l_reshaped
-
-
-def get_layer_output_fn(fn_inputs, network, on_unused_input='raise'):
-    import theano
-    outs = []
-    for layer in lasagne.layers.get_all_layers(network):
-        outs.append(lasagne.layers.get_output(layer, deterministic=True))
-    out_fn = theano.function(fn_inputs, outs, on_unused_input=on_unused_input)
-    return out_fn
-
-
-def get_train_and_val_fn(inputs, target_var, network, replace_nans=True, use_time=False):
-    # Create a loss expression for training, i.e., a scalar objective we want
-    # to minimize (for our multi-class problem, it is the cross-entropy loss):
+def get_train_and_val_fn(inputs, target_var, network):
+    # Get network output
     prediction = lasagne.layers.get_output(network)
+    # Calculate training accuracy
     train_acc = T.mean(T.eq(T.argmax(prediction, axis=1), target_var),
                   dtype=theano.config.floatX)
+    # Calculate crossentropy between predictions and targets
     loss = lasagne.objectives.categorical_crossentropy(prediction, target_var)
     loss = loss.mean()
-    # We could add some weight decay as well here, see lasagne.regularization.
 
-    # Create update expressions for training, i.e., how to modify the
-    # parameters at each training step. Here, we'll use Stochastic Gradient
-    # Descent (SGD) with Nesterov momentum, but Lasagne offers plenty more.
+    # Fetch trainable parameters
     params = lasagne.layers.get_all_params(network, trainable=True)
-    # updates = lasagne.updates.nesterov_momentum(
-    #         loss, params, learning_rate=0.01, momentum=0.9)
-    # updates = lasagne.updates.adam(loss, params, learning_rate=3e-5)
+    # Calculate updates for the parameters given the loss
     updates = lasagne.updates.adam(loss, params, learning_rate=1e-3)
-    #updates = PartialAdam(loss, params, update_every=update_every, learning_rate=1e-4)
 
-    #rmsprop(loss, params, learning_rate=1e-4)
-    #u pdates = lasagne.updates.rmsprop(loss, params)
-    if replace_nans:
-        updates = replace_updates_nans_with_zero(updates)
-
-    # Create a loss expression for validation/testing. The crucial difference
-    # here is that we do a deterministic forward pass through the network,
-    # disabling dropout layers.
+    # Fetch network output, using deterministic methods
     test_prediction = lasagne.layers.get_output(network, deterministic=True)
-    test_loss = lasagne.objectives.categorical_crossentropy(test_prediction,
-                                                            target_var)
+    # Again calculate crossentropy, this time using (test-time) determinstic pass
+    test_loss = lasagne.objectives.categorical_crossentropy(test_prediction, target_var)
     test_loss = test_loss.mean()
-    # As a bonus, also create an expression for the classification accuracy:
+    # Also, create an expression for the classification accuracy:
     test_acc = T.mean(T.eq(T.argmax(test_prediction, axis=1), target_var),
                       dtype=theano.config.floatX)
 
-    if not use_time:
-        on_unused_input='warn'
-    else:
-        on_unused_input='raise'
+    # Get the raw output activations, for every layer
+    out_fn = get_layer_output_fn(inputs, network)
 
-    out_fn = get_layer_output_fn(inputs, network, on_unused_input=on_unused_input)
-    # Compile a function performing a training step on a mini-batch (by giving
-    # the updates dictionary) and returning the corresponding training loss:
+    # Add in the targets to the function inputs
     fn_inputs = inputs + [target_var]
-    train_fn = theano.function(fn_inputs, [loss, train_acc], updates=updates, on_unused_input=on_unused_input)
+    # Compile a train function with the updates, returning loss and accuracy
+    train_fn = theano.function(fn_inputs, [loss, train_acc], updates=updates)
     # Compile a second function computing the validation loss and accuracy:
-    val_fn = theano.function(fn_inputs, [test_loss, test_acc], on_unused_input=on_unused_input)
+    val_fn = theano.function(fn_inputs, [test_loss, test_acc])
 
     return train_fn, val_fn, out_fn
 
-def get_rnn(input_var, mask_var, time_var, arch_size, GRAD_CLIP=100, bn=False, use_time=False, model_type='plstm'):
+def get_rnn(input_var, mask_var, time_var, arch_size, GRAD_CLIP=100, bn=False, model_type='plstm'):
     # (batch size, max sequence length, number of features)
     l_in = lasagne.layers.InputLayer(shape=(None, None, 1), input_var=input_var) #L0?
     # Mask as matrices of dimensionality (N_BATCH, MAX_LENGTH)
@@ -105,16 +68,16 @@ def get_rnn(input_var, mask_var, time_var, arch_size, GRAD_CLIP=100, bn=False, u
             num_units=arch_size[1],
             mask_input=l_mask,
             ingate=Gate(b=lasagne.init.Constant(-0.1)),
-            forgetgate=Gate(b=lasagne.init.Constant(0), nonlinearity=nonlinearities.sigmoid),
-            cell=Gate(W_cell=None, nonlinearity=nonlinearities.tanh),
+            forgetgate=Gate(b=lasagne.init.Constant(0), nonlinearity=lasagne.nonlinearities.sigmoid),
+            cell=Gate(W_cell=None, nonlinearity=lasagne.nonlinearities.tanh),
             outgate=Gate(),
-            nonlinearity=nonlinearities.tanh,
+            nonlinearity=lasagne.nonlinearities.tanh,
             grad_clipping=GRAD_CLIP,
             bn=bn,
             timegate=PLSTMTimeGate(
                 Period=ExponentialUniformInit((1,3)),
-                Shift=init.Uniform( (0., 100)),
-                On_End=init.Constant(0.05))
+                Shift=lasagne.init.Uniform( (0., 100)),
+                On_End=lasagne.init.Constant(0.05))
             )
 
     else:
@@ -124,10 +87,10 @@ def get_rnn(input_var, mask_var, time_var, arch_size, GRAD_CLIP=100, bn=False, u
                     num_units=arch_size[1],
                     mask_input=l_mask, grad_clipping=GRAD_CLIP,
                     ingate=Gate(b=lasagne.init.Constant(-0.1)),
-                    forgetgate=Gate(b=lasagne.init.Constant(0), nonlinearity=nonlinearities.sigmoid),
-                    cell=Gate(W_cell=None, nonlinearity=nonlinearities.tanh),
+                    forgetgate=Gate(b=lasagne.init.Constant(0), nonlinearity=lasagne.nonlinearities.sigmoid),
+                    cell=Gate(W_cell=None, nonlinearity=lasagne.nonlinearities.tanh),
                     outgate=Gate(),
-                    nonlinearity=nonlinearities.tanh,
+                    nonlinearity=lasagne.nonlinearities.tanh,
                     bn=bn)
 
     # Need to slice off the last layer now
@@ -145,33 +108,34 @@ class SinWaveIterator(object):
     """
     """
     def flow(self, sample_regularly, sample_res, min_period=1, max_period=100, min_spec_period=5, max_spec_period=6,
-                batch_size=32, nb_examples=10000, min_duration=10, max_duration=200,
+                batch_size=32, num_examples=10000, min_duration=15, max_duration=125,
                 # NOTE CHANGED FOR REVIEW -- MAX_NUM_POINTS ORIGINALLY 500
-                min_num_points=10, max_num_points=200):
-        # Get some constants
-        num_examples = nb_examples
-        nb_batch = int(np.ceil(float(num_examples)/batch_size))
-
-        b = 0
+                min_num_points=15, max_num_points=125):
+        # Calculate constants
+        num_batches = int(np.ceil(float(num_examples)/batch_size))
         min_log_period, max_log_period = np.log(min_period), np.log(max_period)
-        while b < nb_batch:
+        b = 0
+        while b < num_batches:
+            # Choose curve and sampling parameters
             num_points = np.random.uniform(low=min_num_points,high=max_num_points,size=(batch_size))
             duration = np.random.uniform(low=min_duration, high=max_duration, size=batch_size)
             start = np.random.uniform(low=0, high=max_duration-duration, size=batch_size)
             periods = np.exp(np.random.uniform(low=min_log_period, high=max_log_period, size=(batch_size)))
 
-            # Ensure always at least half
-
+            # Ensure always at least half is special class
             periods[:len(periods)/2] = np.random.uniform(low=min_spec_period, high=max_spec_period, size=len(periods)/2)
             shifts = np.random.uniform(low=0,high=duration,size=(batch_size))
 
+            # Define arrays of data to fill in
             all_t = []
             all_masks = []
             all_wavs = []
             for idx in range(batch_size):
                 if sample_regularly:
+                    # Synchronous condition
                     t = np.arange(start[idx],start[idx]+duration[idx],step=sample_res)
                 else:
+                    # Asynchronous condition
                     t = np.sort(np.random.random(int(num_points[idx])))*duration[idx]+start[idx]
                 wavs = np.sin(2*np.pi/periods[idx]*t-shifts[idx])
                 mask = np.ones(wavs.shape)
@@ -179,6 +143,7 @@ class SinWaveIterator(object):
                 all_masks.append(mask)
                 all_wavs.append(wavs)
 
+            # Now pack all the data down into masked matrices
             lengths = [len(item) for item in all_masks]
             max_length = np.max(lengths)
             bXt = np.zeros((batch_size, max_length))
@@ -189,11 +154,11 @@ class SinWaveIterator(object):
                 bXmask[idx, max_length-lengths[idx]:] = all_masks[idx]
                 bXt[idx, max_length-lengths[idx]:] = all_t[idx]
 
-
+            # Define and calculate labels
             bY = np.zeros(batch_size)
             bY[(periods>=min_spec_period)*(periods<=max_spec_period)] = 1
-            #print('\t\tStart: {}, Duration: {}'.format(start, duration))
 
+            # Yield data
             yield bX.astype('float32'), bXmask.astype('bool'), bXt.astype('float32'), bY.astype('int32')
             b += 1
 
@@ -206,30 +171,30 @@ if __name__ == '__main__':
     # Control meta parameters
     parser.add_argument('--seed',       default=42,   type=int, help='Initialize the random seed of the run (for reproducibility).')
     parser.add_argument('--grad_clip',  default=10.,  type=float, help='Clip the gradient to prevent it from blowing up.')
-    parser.add_argument('--batch_size', default=32,   type=int, help='Initialize the random seed of the run (for reproducibility).')
+    parser.add_argument('--batch_size', default=64,   type=int, help='Initialize the random seed of the run (for reproducibility).')
     parser.add_argument('--num_epochs', default=100,  type=int, help='Number of epochs to train for.')
     parser.add_argument('--patience',   default=100,  type=int, help='How long to wait for an increase in validation error before quitting.')
     parser.add_argument('--save_every', default=1000, type=int, help='How many epochs to wait between a save.')
+    parser.add_argument('--log_only',   default=0,    type=int, help='Whether to save parameters.')
     # Control architecture and run data
-    parser.add_argument('--model_type',     default='plstm', help='Choose which model type to use.')
-    parser.add_argument('--use_time',       default=1, type=int, help='Whether to use time or just ignore and use standard LSTM.')
-    parser.add_argument('--batch_norm',     default=0, type=int, help='Batch normalize.')
+    parser.add_argument('--model_type',       default='plstm', help='Choose which model type to use.')
+    parser.add_argument('--batch_norm',       default=0, type=int, help='Batch normalize.')
     parser.add_argument('--sample_regularly', default=0, type=int, help='Whether to sameple regularly or irregularly.')
-    parser.add_argument('--sample_res',     default=0.5, type=float, help='Resolution at which to sample.')
+    parser.add_argument('--sample_res',       default=0.5, type=float, help='Resolution at which to sample.')
     args = parser.parse_args()
 
     # Set seed
     np.random.seed(args.seed)
+
     # Constants
     num_train = 5000
     num_test = 500
     arch_size = [None, 110, 2]
-    # theano.config.mode='FAST_COMPILE'
 
     #  Set filename
     comb_filename    = '{}_{}_bn_{}_reg_samp_{}_samp_res_{}_{}'.format(args.filename, args.model_type,
     	args.batch_norm, args.sample_regularly, args.sample_res, args.seed)
-    if args.run_id!='':
+    if args.run_id != '':
     	comb_filename += '_{}'.format(args.run_id)
 
     # Create symbolic vars
@@ -260,7 +225,8 @@ if __name__ == '__main__':
     # Instantiate data generator
     d = SinWaveIterator()
     # Save result
-    save_model(comb_filename, 'pretrain', network, log)
+    if not args.log_only:
+    	save_model(comb_filename, 'pretrain', network, log)
 
     # Precalc for announcing
     num_train_batches = int(np.ceil(float(num_train)/args.batch_size))
@@ -276,10 +242,9 @@ if __name__ == '__main__':
         train_acc = 0
         train_batches = 0
         start_time = time.time()
-        failed = 0
 
         # Call the data generator
-        for data in d.flow(batch_size=args.batch_size, nb_examples=num_train,
+        for data in d.flow(batch_size=args.batch_size, num_examples=num_train,
                            sample_regularly=args.sample_regularly, sample_res=args.sample_res):
             bX, maskX, bXt, bY = data
             # Do a training batch
@@ -300,7 +265,7 @@ if __name__ == '__main__':
         val_err = 0
         val_acc = 0
         val_batches = 0
-        for data in d.flow(batch_size=args.batch_size, nb_examples=num_test,
+        for data in d.flow(batch_size=args.batch_size, num_examples=num_test,
                            sample_regularly=args.sample_regularly, sample_res=args.sample_res):
             # Pass a batch through the test function
             bX, maskX, bXt, bY = data
@@ -327,10 +292,9 @@ if __name__ == '__main__':
         print("\t Validation loss:\t\t{:.6f}".format(log['val_err'][-1]))
         print("\t Training accuracy:\t\t{:.2f}".format(log['train_acc'][-1]))
         print("\t Validation accuracy:\t\t{:.2f}".format(log['val_acc'][-1]))
-        print("\t Run failures: {}".format(failed))
 
         # Save result
-        if (epoch+1 % args.save_every) == 0:
+        if (epoch+1 % args.save_every) == 0 and not args.log_only:
             print('Saving....')
             save_model(comb_filename, 'recent', network, log)
 
@@ -341,5 +305,8 @@ if __name__ == '__main__':
             break
 
     # Save result
-    save_model(comb_filename, 'final', network, log)
+    if args.log_only:
+    	save_log(comb_filename, 'final', network, log)
+    else:
+    	save_model(comb_filename, 'final', network, log)
     print('Completed.')

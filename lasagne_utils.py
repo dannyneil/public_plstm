@@ -17,11 +17,9 @@ def replace_updates_nans_with_zero(updates):
         k = T.switch(T.eq(v, np.nan), float(0.), v)
     return updates
 
-def save_model(filename, suffix, model, log=None, announce=True):
+def save_model(filename, suffix, model, log=None, announce=True, log_only=False):
     # Build filename
     filename = '{}_{}'.format(filename, suffix)
-    # Acquire Data
-    data = lasagne.layers.get_all_param_values(model)
     # Store in separate directory
     filename = os.path.join('./models/', filename)
     # Inform user
@@ -29,8 +27,11 @@ def save_model(filename, suffix, model, log=None, announce=True):
         print('Saving to: {}'.format(filename))
     # Generate parameter filename and dump
     param_filename = '%s.params' % (filename)
-    with open(param_filename, 'w') as f:
-        pickle.dump(data, f)
+    if not log_only:
+        # Acquire Data
+        data = lasagne.layers.get_all_param_values(model)
+        with open(param_filename, 'w') as f:
+            pickle.dump(data, f)
     # Generate log filename and dump
     if log is not None:
         log_filename = '%s.log' % (filename)
@@ -66,6 +67,15 @@ def non_flattening_dense(l_in, batch_size, seq_len, *args, **kwargs):
     # Reshape it back out - this could be done implicitly, but I want to throw an error if not matching
     l_reshaped = lasagne.layers.ReshapeLayer(l_dense, (batch_size, seq_len, l_dense.output_shape[1]))
     return l_reshaped
+
+
+def get_layer_output_fn(fn_inputs, network, on_unused_input='raise'):
+    import theano
+    outs = []
+    for layer in lasagne.layers.get_all_layers(network):
+        outs.append(lasagne.layers.get_output(layer, deterministic=True))
+    out_fn = theano.function(fn_inputs, outs, on_unused_input=on_unused_input)
+    return out_fn
 
 class ExponentialUniformInit(Initializer):
     """
