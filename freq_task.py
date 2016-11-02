@@ -74,6 +74,7 @@ def get_rnn(input_var, mask_var, time_var, arch_size, GRAD_CLIP=100, bn=False, m
             nonlinearity=lasagne.nonlinearities.tanh,
             grad_clipping=GRAD_CLIP,
             bn=bn,
+            learn_time_params=[True, True, True],
             timegate=PLSTMTimeGate(
                 Period=ExponentialUniformInit((1,3)),
                 Shift=lasagne.init.Uniform( (0., 100)),
@@ -109,7 +110,6 @@ class SinWaveIterator(object):
     """
     def flow(self, sample_regularly, sample_res, min_period=1, max_period=100, min_spec_period=5, max_spec_period=6,
                 batch_size=32, num_examples=10000, min_duration=15, max_duration=125,
-                # NOTE CHANGED FOR REVIEW -- MAX_NUM_POINTS ORIGINALLY 500
                 min_num_points=15, max_num_points=125):
         # Calculate constants
         num_batches = int(np.ceil(float(num_examples)/batch_size))
@@ -121,10 +121,10 @@ class SinWaveIterator(object):
             duration = np.random.uniform(low=min_duration, high=max_duration, size=batch_size)
             start = np.random.uniform(low=0, high=max_duration-duration, size=batch_size)
             periods = np.exp(np.random.uniform(low=min_log_period, high=max_log_period, size=(batch_size)))
+            shifts = np.random.uniform(low=0,high=duration,size=(batch_size))
 
             # Ensure always at least half is special class
             periods[:len(periods)/2] = np.random.uniform(low=min_spec_period, high=max_spec_period, size=len(periods)/2)
-            shifts = np.random.uniform(low=0,high=duration,size=(batch_size))
 
             # Define arrays of data to fill in
             all_t = []
@@ -162,6 +162,65 @@ class SinWaveIterator(object):
             yield bX.astype('float32'), bXmask.astype('bool'), bXt.astype('float32'), bY.astype('int32')
             b += 1
 
+# Special Data Iterator
+# ----------------------------------------------------
+class SinWaveComboIterator(object):
+    """
+    """
+    def flow(self, sample_regularly, sample_res, min_period=1, max_period=100,
+                min_spec_period=5, max_spec_period=6, min_spec_period_2=13, max_spec_period_2=15,
+                batch_size=32, num_examples=10000, min_duration=1, max_duration=100,
+                min_num_points=100, max_num_points=1000):
+        # Calculate constants
+        num_batches = int(np.ceil(float(num_examples)/batch_size))
+        min_log_period, max_log_period = np.log(min_period), np.log(max_period)
+        b = 0
+        while b < num_batches:
+            # Choose curve and sampling parameters
+            num_points = np.random.uniform(low=min_num_points,high=max_num_points,size=(batch_size))
+            duration = np.random.uniform(low=min_duration, high=max_duration, size=batch_size)
+            start = np.random.uniform(low=0, high=max_duration-duration, size=batch_size)
+            periods = np.exp(np.random.uniform(low=min_log_period, high=max_log_period, size=(batch_size)))
+            periods2 = np.exp(np.random.uniform(low=min_log_period, high=max_log_period, size=(batch_size)))
+            shifts = np.random.uniform(low=0,high=duration,size=(batch_size))
+            shifts2 = np.random.uniform(low=0,high=duration,size=(batch_size))
+
+            # Ensure always at least half is special class
+            periods[:len(periods)/2] = np.random.uniform(low=min_spec_period, high=max_spec_period, size=len(periods)/2)
+            periods2[:len(periods)/2] = np.random.uniform(low=min_spec_period_2, high=max_spec_period_2, size=len(periods)/2)
+
+            # Define arrays of data to fill in
+            all_t = []
+            all_masks = []
+            all_wavs = []
+            for idx in range(batch_size):
+                # Asynchronous condition
+                t = np.sort(np.random.random(int(num_points[idx])))*duration[idx]+start[idx]
+                wavs = np.sin(1./periods[idx]*t-shifts[idx]) + np.sin(1./periods2[idx]*t-shifts2[idx])
+                mask = np.ones(wavs.shape)
+                all_t.append(t)
+                all_masks.append(mask)
+                all_wavs.append(wavs)
+
+            # Now pack all the data down into masked matrices
+            lengths = [len(item) for item in all_masks]
+            max_length = np.max(lengths)
+            bXt = np.zeros((batch_size, max_length))
+            bXmask = np.zeros((batch_size, max_length))
+            bX = np.zeros((batch_size, max_length, 1))
+            for idx in range(batch_size):
+                bX[idx, max_length-lengths[idx]:, 0] = all_wavs[idx]
+                bXmask[idx, max_length-lengths[idx]:] = all_masks[idx]
+                bXt[idx, max_length-lengths[idx]:] = all_t[idx]
+
+            # Define and calculate labels
+            bY = np.zeros(batch_size)
+            bY[(periods>=min_spec_period)*(periods<=max_spec_period)*(periods2>=min_spec_period_2)*(periods2<=max_spec_period_2)] = 1
+
+            # Yield data
+            yield bX.astype('float32'), bXmask.astype('bool'), bXt.astype('float32'), bY.astype('int32')
+            b += 1
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Load a timeful RNN using PLSTM.')
     # File and path naming stuff
@@ -169,6 +228,7 @@ if __name__ == '__main__':
     parser.add_argument('--filename', default='freq_task_30.09', help='Filename to save model and log to.')
     parser.add_argument('--resume',   default=None, help='Filename to load model and log from.')
     # Control meta parameters
+    parser.add_argument('--exp',        default='task1', help='Choose whether to run "task1" (single freq) or "task2" (freq combo) experiment.')
     parser.add_argument('--seed',       default=42,   type=int, help='Initialize the random seed of the run (for reproducibility).')
     parser.add_argument('--grad_clip',  default=10.,  type=float, help='Clip the gradient to prevent it from blowing up.')
     parser.add_argument('--batch_size', default=64,   type=int, help='Initialize the random seed of the run (for reproducibility).')
@@ -192,10 +252,13 @@ if __name__ == '__main__':
     arch_size = [None, 110, 2]
 
     #  Set filename
-    comb_filename    = '{}_{}_bn_{}_reg_samp_{}_samp_res_{}_{}'.format(args.filename, args.model_type,
-    	args.batch_norm, args.sample_regularly, args.sample_res, args.seed)
+    if args.exp=='task2':
+        comb_filename = '{}_task2_{}_bn_{}_{}'.format(args.filename, args.model_type, args.batch_norm, args.seed)
+    else:
+        comb_filename = '{}_task1_{}_bn_{}_reg_samp_{}_samp_res_{}_{}'.format(args.filename, args.model_type,
+            args.batch_norm, args.sample_regularly, args.sample_res, args.seed)
     if args.run_id != '':
-    	comb_filename += '_{}'.format(args.run_id)
+        comb_filename += '_{}'.format(args.run_id)
 
     # Create symbolic vars
     input_var       = T.ftensor3('my_input_var')
@@ -207,7 +270,7 @@ if __name__ == '__main__':
     print("Building network ...")
     #   Get input dimensions
     network = get_rnn(input_var, mask_var, time_var, arch_size, args.grad_clip,
-    	bn=args.batch_norm, model_type=args.model_type)
+        bn=args.batch_norm, model_type=args.model_type)
     # Instantiate log
     log = defaultdict(list)
     print("Built.")
@@ -223,10 +286,14 @@ if __name__ == '__main__':
     train_fn, val_fn, out_fn = get_train_and_val_fn([input_var, mask_var, time_var], target_var, network)
 
     # Instantiate data generator
-    d = SinWaveIterator()
+    if args.exp=='task2':
+        print('Performing Task 2, choosing asynchronous...')
+        d = SinWaveComboIterator()
+    else:
+        d = SinWaveIterator()
     # Save result
     if not args.log_only:
-    	save_model(comb_filename, 'pretrain', network, log)
+        save_model(comb_filename, 'pretrain', network, log)
 
     # Precalc for announcing
     num_train_batches = int(np.ceil(float(num_train)/args.batch_size))
@@ -306,7 +373,7 @@ if __name__ == '__main__':
 
     # Save result
     if args.log_only:
-    	save_log(comb_filename, 'final', network, log)
+        save_log(comb_filename, 'final', network, log)
     else:
-    	save_model(comb_filename, 'final', network, log)
+        save_model(comb_filename, 'final', network, log)
     print('Completed.')

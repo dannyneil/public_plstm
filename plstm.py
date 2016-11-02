@@ -52,7 +52,8 @@ class PLSTMLayer(MergeLayer):
                  mask_input=None,
                  only_return_final=False,
                  bn=False,
-                 learn_time_params=[True, True, True],
+                 learn_time_params=[True, True, False],
+                 off_alpha=1e-3,
                  **kwargs):
 
         # This layer inherits from a MergeLayer, because it can have four
@@ -125,6 +126,8 @@ class PLSTMLayer(MergeLayer):
                                    regularizable=False),
                 gate.nonlinearity)
 
+        # PHASED LSTM: Initialize params for the time gate
+        self.off_alpha = off_alpha
         if timegate == None:
             timegate = TimeGate()
         def add_timegate_params(gate, gate_name):
@@ -139,8 +142,6 @@ class PLSTMLayer(MergeLayer):
                     self.add_param(gate.On_End, (num_units, ),
                                    name="On_End_{}".format(gate_name),
                                    trainable=learn_time_params[2]))
-
-        # TIME STUFF
         print('Learnableness: {}'.format(learn_time_params))
         (self.period_timegate, self.shift_timegate,
          self.on_end_timegate) = add_timegate_params(timegate, 'timegate')
@@ -247,7 +248,7 @@ class PLSTMLayer(MergeLayer):
         if self.cell_init_incoming_index > 0:
             cell_init = inputs[self.cell_init_incoming_index]
 
-        # TIME STUFF
+        # PHASED LSTM: Define new input
         time_mat = inputs[self.time_incoming_index]
 
         # Treat all dimensions after the second as flattened feature dimensions
@@ -260,8 +261,9 @@ class PLSTMLayer(MergeLayer):
         # Because scan iterates over the first dimension we dimshuffle to
         # (n_time_steps, n_batch, n_features)
         input = input.dimshuffle(1, 0, 2)
-        time_input = time_mat.dimshuffle(1,0)            # TIME STUFF
-        time_seq_len, time_num_batch = time_input.shape # TIME STUFF
+        # PHASED LSTM: Get shapes for time input and rearrange for the scan fn
+        time_input = time_mat.dimshuffle(1,0)
+        time_seq_len, time_num_batch = time_input.shape
         seq_len, num_batch, _ = input.shape
 
         # Stack input weight matrices into a (num_inputs, 4*num_units)
@@ -270,38 +272,33 @@ class PLSTMLayer(MergeLayer):
             [self.W_in_to_ingate, self.W_in_to_forgetgate,
              self.W_in_to_cell, self.W_in_to_outgate], axis=1)
 
-        # No need for time input
-        # ---
-
         # Same for hidden weight matrices
         W_hid_stacked = T.concatenate(
             [self.W_hid_to_ingate, self.W_hid_to_forgetgate,
              self.W_hid_to_cell, self.W_hid_to_outgate], axis=1)
-
-        # No need for time input
-        # ---
 
         # Stack biases into a (4*num_units) vector
         b_stacked = T.concatenate(
             [self.b_ingate, self.b_forgetgate,
              self.b_cell, self.b_outgate], axis=0)
 
+        # PHASED LSTM: If test time, off-phase means really shut.
         if deterministic:
-            print('Using true off for testing.')            
+            print('Using true off for testing.')
             off_slope = 0.0
         else:
-            print('Using 1e-3 for off_slope.')            
-            off_slope = 0.001
+            print('Using {} for off_slope.'.format(self.off_alpha))
+            off_slope = self.off_alpha
 
-        # Pregenerate broadcast vars
-        # Same neuron in different batches has same shift, period, and on_end
+        # PHASED LSTM: Pregenerate broadcast vars.
+        #   Same neuron in different batches has same shift and period.  Also,
+        #   precalculate the middle (on_mid) and end (on_end) of the open-phase
+        #   ramp.
         shift_broadcast = self.shift_timegate.dimshuffle(['x',0])
         period_broadcast = T.abs_(self.period_timegate.dimshuffle(['x',0]))
         on_mid_broadcast = T.abs_(self.on_end_timegate.dimshuffle(['x',0])) * 0.5 * period_broadcast
         on_end_broadcast = T.abs_(self.on_end_timegate.dimshuffle(['x',0])) * period_broadcast
 
-        # No need for time input
-        # ---
         if self.precompute_input:
             # Because the input is given for all time steps, we can
             # precompute_input the inputs dot weight matrices before scanning.
@@ -344,7 +341,7 @@ class PLSTMLayer(MergeLayer):
             forgetgate = self.nonlinearity_forgetgate(forgetgate)
             cell_input = self.nonlinearity_cell(cell_input)
 
-            # Apply timegate to previous state
+            # Mix in new stuff
             cell = forgetgate*cell_previous + ingate*cell_input
 
             if self.peepholes:
@@ -355,10 +352,11 @@ class PLSTMLayer(MergeLayer):
             hid = outgate*self.nonlinearity(cell)
             return [cell, hid]
 
+        # PHASED LSTM: The actual calculation of the time gate
         def calc_time_gate(time_input_n):
-            # Calculate time gate 
+            # Broadcast the time across all units
             t_broadcast = time_input_n.dimshuffle([0,'x'])
-            # Get mod cycle time
+            # Get the time within the period
             in_cycle_time = T.mod(t_broadcast + shift_broadcast, period_broadcast)
             # Find the phase
             is_up_phase = T.le(in_cycle_time, on_mid_broadcast)
@@ -371,7 +369,7 @@ class PLSTMLayer(MergeLayer):
 
             return sleep_wake_mask
 
-
+        # PHASED LSTM: Mask the updates based on the time phase
         def step_masked(input_n, time_input_n, mask_n, cell_previous, hid_previous, *args):
             cell, hid = step(input_n, time_input_n, cell_previous, hid_previous, *args)
 
@@ -409,7 +407,7 @@ class PLSTMLayer(MergeLayer):
             # Dot against a 1s vector to repeat to shape (num_batch, num_units)
             hid_init = T.dot(ones, self.hid_init)
 
- 
+
         non_seqs = [W_hid_stacked, self.period_timegate, self.shift_timegate, self.on_end_timegate]
         # The "peephole" weight matrices are only used when self.peepholes=True
         if self.peepholes:
