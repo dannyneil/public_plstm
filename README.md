@@ -2,7 +2,9 @@
 This is the official repository of "Phased LSTM: Accelerating Recurrent Network Training for Long or Event-based Sequences," presented as an oral presentation at NIPS 2016, by Daniel Neil, Michael Pfeiffer, and Shih-Chii Liu.
 
 ## Rule of Thumb
-**In general, if you are using ~1000 timesteps or more in your input sequence, you can benefit from something like PLSTM.** If you're only answering bAbI tasks or doing negative log-likelihood on some paragraph of text, you're unlikely to see improvement from this model.  However, for long sequences, or sequences which are fusing input from multiple sensors with different timing (e.g., one going at 3 Hz and the other at 25 Hz), this model is both natural and efficient.
+In general, **if you are using ~1000 timesteps or more in your input sequence, you can benefit from PLSTM.**
+
+If you're only answering bAbI tasks or doing negative log-likelihood on some paragraph of text, you're unlikely to see improvement from this model.  However, for long sequences, or sequences which are fusing input from multiple sensors with different timing (e.g., one going at 3 Hz and the other at 25 Hz), this model is both natural and efficient.
 
 # Freq Task 1
 To run the first task, run the shell script [a_freq_task.sh](/a_freq_task.sh).  It should load the first task with default parameters, training each model under each condition for 70 epochs.  Afterwards, you can open [A_Freq_Task.ipynb](/A_Freq_Task.ipynb) to render the results, which should show the following:
