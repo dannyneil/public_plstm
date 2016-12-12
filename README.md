@@ -58,6 +58,13 @@ PLSTM was originally written in Theano.  There are some subtle differences betwe
 
 Also note that this doesn't take advantage of any sparse BLAS code.  The latest TensorFlow code has some good CuSPARSE support, and the gemvi sparse instructions are great for computing the dense matrix x sparse vector operations we need for Phased LSTM, and should absolutely offer speedups at the sparsity levels that are shown here.
 
+# Default parameters
+Generally, for "standard" tasks, you have an input of several hundred time to a couple thousand steps and your neurons tend to be overcomplete.  For this situation, the default parameters given here are pretty good:
+
+ * Period drawn from np.exp(np.random.uniform(1, 5)), i.e., (2.71, 148) timesteps per cycle, where 5 is as likely as 50.
+ * An on ratio of around 5%; sometimes, for hard problems, you'll need to either turn on learning for this parameter, which gradually expands r_on towards 100% (because why not; the neuron will always decrease loss if it is on more often).  Alternatively, you can fix it at 10%, which generally seems like a good number so far.
+ * A phase shift drawn from all possible phase shifts.  If you don't cover all phase shifts, or don't have enough neurons, you'll have "holes" in time where no neurons are paying attention.
+
 # Other Tasks
 Other tasks are coming soon, when I can clean them up.
 
