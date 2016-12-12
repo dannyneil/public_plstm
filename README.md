@@ -14,7 +14,7 @@ To run the second task, run the shell script [b_freq_combo_task.sh](/b_freq_comb
 It runs the same Python file as in task 1, but the data iterator is changed to be the more complex version.
 
 # PLSTM Notes
-The essence of the PLSTM code ([plstm.py](/plstm.py))is the following lines:
+The essence of the PLSTM code ([plstm.py](/plstm.py#L355-L370)) is the following lines:
 
 ```python
 def calc_time_gate(time_input_n):
@@ -35,7 +35,7 @@ def calc_time_gate(time_input_n):
 ```
 This creates the rhythmic mask based on some `time_input_n` which is a vector of times, one time for each item in the batch.  The timestamp is broadcast to form a 2-tensor of size `[batch_size, num_neurons]` which contains the timestamp at each neuron for each item in the batch (at one timestep), and stores this in `t_broadcast`.  We calculate the `in_cycle_time`, which ranges between 0 and the period length for each neuron.  Then, subsequently, we use that `in_cycle_time` to figure out if it is in the `is_up_phase`, `is_down_phase`, or just the off_phase.  Then, we just use `T.switch` to apply the correct transformation for each phase.
 
-Once the mask is generated, we simply mask the cell state with the sleep-wake cycle:
+Once the mask is generated, we simply mask the cell state with the sleep-wake cycle ([plstm.py](/plstm.py#L380-L381)):
 ```python
 def step_masked(input_n, time_input_n, mask_n, cell_previous, hid_previous, *args):
     cell, hid = step(input_n, time_input_n, cell_previous, hid_previous, *args)
