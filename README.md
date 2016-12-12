@@ -64,10 +64,10 @@ PLSTM was originally written in Theano.  There are some subtle differences betwe
 Also note that this doesn't take advantage of any sparse BLAS code.  The latest TensorFlow code has some good CuSPARSE support, and the gemvi sparse instructions are great for computing the `dense_matrix x sparse` vector operations we need for Phased LSTM, and should absolutely offer speedups at the sparsity levels that are shown here.  But, as far as I know, no one has yet publicly implemented this.
 
 # Default parameters
-Generally, for "standard" tasks, you have an input of several hundred time to a couple thousand steps and your neurons tend to be overcomplete.  For this situation, the default parameters given here are pretty good:
+Generally, for "standard" tasks, you have an input of several hundred to a couple thousand steps and your neurons tend to be overcomplete.  For this situation, the default parameters given here are pretty good:
 
  * Period drawn from `np.exp(np.random.uniform(1, 5))`, i.e., (2.71, 148) timesteps per cycle, where 5 is as likely as 50.
- * An on ratio of around 5%; sometimes, for hard problems, you'll need to either turn on learning for this parameter, which gradually expands r_on towards 100% (because why not; the neuron will always decrease loss if it is on more often).  Alternatively, you can fix it at 10%, which generally seems like a good number so far.
+ * An on ratio of around 5%; sometimes, for hard problems, you'll need to either turn on learning for this parameter, which gradually expands r_on towards 100% (because why not; the neuron will always decrease loss if it is on more often.  Hint: think about adding an L2 cost to this, which is equivalent to having SGD find you a good solution but also accounting for compute cost.).  Alternatively, you can fix it at 10%, which generally seems like a good number so far.
  * A phase shift drawn from all possible phase shifts.  If you don't cover all phase shifts, or don't have enough neurons, you'll have "holes" in time where no neurons are paying attention.
  * The "timestamp" for a standard input is the integer time index, ranging from 0 to num_timesteps.
 
