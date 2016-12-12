@@ -2,19 +2,19 @@
 This is the official repository of "Phased LSTM: Accelerating Recurrent Network Training for Long or Event-based Sequences," presented as an oral presentation at NIPS 2016, by Daniel Neil, Michael Pfeiffer, and Shih-Chii Liu.
 
 # Freq Task 1
-To run the first task, run the shell script "a_freq_task.sh."  It should load the first task with default parameters, training each model under each condition for 70 epochs.  Afterwards, you can open "A_Freq_Task.ipynb" to render the results, which should show the following:
+To run the first task, run the shell script [a_freq_task.sh](/a_freq_task.sh).  It should load the first task with default parameters, training each model under each condition for 70 epochs.  Afterwards, you can open [A_Freq_Task.ipynb](/A_Freq_Task.ipynb) to render the results, which should show the following:
 
 ![Freq Task A](/images/task1_acc_bar.png)
 
 # Freq Task 2
-To run the second task, run the shell script "b_freq_combo_task.sh."  It should load the second task with default parameters, training each model with the more complex stimuli for 300 epochs (a long time!).  Afterwards, you can open "B_Freq_Combo_Task.ipynb" to render the results, which should show the following:
+To run the second task, run the shell script [b_freq_combo_task.sh](/b_freq_combo_task.sh).  It should load the second task with default parameters, training each model with the more complex stimuli for 300 epochs (a long time!).  Afterwards, you can open [B_Freq_Combo_Task.ipynb](/B_Freq_Combo_Task.ipynb) to render the results, which should show the following:
 
 ![Freq Task A](/images/task2_acc.png)
 
 It runs the same Python file as in task 1, but the data iterator is changed to be the more complex version.
 
 # PLSTM Notes
-The essence of the PLSTM code is the following lines:
+The essence of the PLSTM code ([plstm.py](/plstm.py))is the following lines:
 
 ```python
 def calc_time_gate(time_input_n):
