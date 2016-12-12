@@ -64,6 +64,7 @@ Generally, for "standard" tasks, you have an input of several hundred time to a 
  * Period drawn from np.exp(np.random.uniform(1, 5)), i.e., (2.71, 148) timesteps per cycle, where 5 is as likely as 50.
  * An on ratio of around 5%; sometimes, for hard problems, you'll need to either turn on learning for this parameter, which gradually expands r_on towards 100% (because why not; the neuron will always decrease loss if it is on more often).  Alternatively, you can fix it at 10%, which generally seems like a good number so far.
  * A phase shift drawn from all possible phase shifts.  If you don't cover all phase shifts, or don't have enough neurons, you'll have "holes" in time where no neurons are paying attention.
+ * The "timestamp" for a standard input is the integer time index, ranging from 0 to num_timesteps.
 
 # Other Tasks
 Other tasks are coming soon, when I can clean them up.
