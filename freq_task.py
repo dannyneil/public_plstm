@@ -225,7 +225,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Load a timeful RNN using PLSTM.')
     # File and path naming stuff
     parser.add_argument('--run_id',   default=os.environ.get('LSB_JOBID',''), help='ID of the run, used in saving.')
-    parser.add_argument('--filename', default='freq_task_30.09', help='Filename to save model and log to.')
+    parser.add_argument('--filename', default='freq_task', help='Filename to save model and log to.')
     parser.add_argument('--resume',   default=None, help='Filename to load model and log from.')
     # Control meta parameters
     parser.add_argument('--exp',        default='task1', help='Choose whether to run "task1" (single freq) or "task2" (freq combo) experiment.')
