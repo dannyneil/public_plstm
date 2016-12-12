@@ -56,7 +56,7 @@ PLSTM was originally written in Theano.  There are some subtle differences betwe
  * Check to see what mod(-1, 5) is to make sure it lines up with your intuition (e.g., negative symmetric or cyclical)
  * Think about whether or not you want to `abs` the phase shift
 
-Also note that this doesn't take advantage of any sparse BLAS code.  The latest TensorFlow code has some good CuSPARSE support, and the gemvi sparse instructions are great for computing the dense matrix x sparse vector operations we need for Phased LSTM, and should absolutely offer speedups at the sparsity levels that are shown here.
+Also note that this doesn't take advantage of any sparse BLAS code.  The latest TensorFlow code has some good CuSPARSE support, and the gemvi sparse instructions are great for computing the `dense_matrix x sparse` vector operations we need for Phased LSTM, and should absolutely offer speedups at the sparsity levels that are shown here.  But, as far as I know, no one has yet publicly implemented this.
 
 # Default parameters
 Generally, for "standard" tasks, you have an input of several hundred time to a couple thousand steps and your neurons tend to be overcomplete.  For this situation, the default parameters given here are pretty good:
