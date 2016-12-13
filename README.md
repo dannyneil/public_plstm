@@ -66,7 +66,7 @@ Also note that this doesn't take advantage of any sparse BLAS code.  The latest 
 # Default parameters
 Generally, for "standard" tasks, you have an input of several hundred to a couple thousand steps and your neurons tend to be overcomplete.  For this situation, the default parameters given here are pretty good:
 
- * Period drawn from `np.exp(np.random.uniform(1, 5))`, i.e., (2.71, 148) timesteps per cycle, where 5e is as likely as 50e.
+ * Period drawn from `np.exp(np.random.uniform(1, 6))`, i.e., (2.71, 403) timesteps per cycle, where 5e is as likely as 50e.
  * An on ratio of around 5%; sometimes, for hard problems, you'll need to either turn on learning for this parameter, which gradually expands r_on towards 100% (because why not; the neuron will always decrease loss if it is on more often.  Hint: think about adding an L2 cost to this, which is equivalent to having SGD find an accurate solution while minimizing compute cost, which is its own interesting topic).  Alternatively, you can fix it at 10%, which generally seems like a good number so far.
  * A phase shift drawn from all possible phase shifts.  If you don't cover all phase shifts, or don't have enough neurons, you'll have "holes" in time where no neurons are paying attention.
  * The "timestamp" for a standard input is the integer time index, ranging from 0 to num_timesteps.
