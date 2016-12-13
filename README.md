@@ -86,3 +86,10 @@ Please use this citation, if the code or paper was useful in your work:
   year={2016}
 }
 ```
+
+# Installation
+Requires Lasagne and Theano.  Other versions for e.g., TensorFlow, Keras, etc., will be linked in soon from the industrious community of brilliant ML programmers...
+
+# Reach out to me!
+If you have any questions about this, please reach out to me at:
+daniel.l.neil@gmail.com
