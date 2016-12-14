@@ -6,8 +6,8 @@ In general, **if you are using ~1000 timesteps or more in your input sequence, y
 
 If you're only answering bAbI tasks or doing negative log-likelihood on some paragraph of text, you're unlikely to see improvement from this model.  However, for long sequences (e.g., whole-text summarization), or sequences which are fusing input from multiple sensors with different timing (e.g., one going at 3 Hz and the other at 25 Hz), this model is both natural and efficient.
 
-## Now available in TensorFlow
- * Tensorflow implementation can be found here: [https://github.com/Enny1991/PLSTM](https://github.com/Enny1991/PLSTM)
+## Now available in TensorFlow!
+ * Tensorflow implementation by Enea Ceolini can be found here: [https://github.com/Enny1991/PLSTM](https://github.com/Enny1991/PLSTM)
 
 # Freq Task 1
 To run the first task, run the shell script [a_freq_task.sh](/a_freq_task.sh).  It should load the first task with default parameters, training each model under each condition for 70 epochs.  Afterwards, you can open [A_Freq_Task.ipynb](/A_Freq_Task.ipynb) to render the results, which should show the following:
