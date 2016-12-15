@@ -6,8 +6,11 @@ In general, **if you are using ~1000 timesteps or more in your input sequence, y
 
 If you're only answering bAbI tasks or doing negative log-likelihood on some paragraph of text, you're unlikely to see improvement from this model.  However, for long sequences (e.g., whole-text summarization), or sequences which are fusing input from multiple sensors with different timing (e.g., one going at 3 Hz and the other at 25 Hz), this model is both natural and efficient.
 
-## Now available in TensorFlow!
+Making it work well for speech and NLP is still experimental and ongoing work.  If this is of interest to you, let me know and I can give you an update.
+
+## Now available in TensorFlow and Keras!
  * Tensorflow implementation by Enea Ceolini can be found here: [https://github.com/Enny1991/PLSTM](https://github.com/Enny1991/PLSTM)
+ * Keras implementation by Francesco Ferroni: [https://github.com/fferroni/PhasedLSTM-Keras](https://github.com/fferroni/PhasedLSTM-Keras)
 
 # Freq Task 1
 To run the first task, run the shell script [a_freq_task.sh](/a_freq_task.sh).  It should load the first task with default parameters, training each model under each condition for 70 epochs.  Afterwards, you can open [A_Freq_Task.ipynb](/A_Freq_Task.ipynb) to render the results, which should show the following:
@@ -41,7 +44,7 @@ def calc_time_gate(time_input_n):
 
     return sleep_wake_mask
 ```
-This creates the rhythmic mask based on some `time_input_n` which is a vector of times, one time for each item in the batch.  The timestamp is broadcast to form a 2-tensor of size `[batch_size, num_neurons]` which contains the timestamp at each neuron for each item in the batch (at one timestep), and stores this in `t_broadcast`.  We calculate the `in_cycle_time`, which ranges between 0 and the period length for each neuron.  Then, subsequently, we use that `in_cycle_time` to figure out if it is in the `is_up_phase`, `is_down_phase`, or just the off_phase.  Then, we just use `T.switch` to apply the correct transformation for each phase.
+This creates the rhythmic mask based on some `time_input_n` which is a vector of times, one time for all neurons for each sample in the batch.  The timestamp is broadcast to form a 2-tensor of size `[batch_size, num_neurons]` which contains the timestamp at each neuron for each item in the batch (at one timestep), and stores this in `t_broadcast`.  We calculate the `in_cycle_time`, which ranges between 0 and the period length for each neuron.  Then, subsequently, we use that `in_cycle_time` to figure out if it is in the `is_up_phase`, `is_down_phase`, or just the off phase.  Then, we use `T.switch` to apply the correct transformation for each phase.
 
 Once the mask is generated, we simply mask the cell state with the sleep-wake cycle ([plstm.py](/plstm.py#L380-L381)):
 ```python
@@ -70,7 +73,7 @@ Also note that this doesn't take advantage of any sparse BLAS code.  The latest 
 Generally, for "standard" tasks, you have an input of several hundred to a couple thousand steps and your neurons tend to be overcomplete.  For this situation, the default parameters given here are pretty good:
 
  * Period drawn from `np.exp(np.random.uniform(1, 6))`, i.e., (2.71, 403) timesteps per cycle, where the chance of getting a period between 5 and 10 is the same as getting a period between 50 and 100.
- * An on ratio of around 5%; sometimes, for hard problems, you'll need to either turn on learning for this parameter, which gradually expands r_on towards 100% (because why not; the neuron will always decrease loss if it is on more often.  Hint: think about adding an L2 cost to this, which is equivalent to having SGD find an accurate solution while minimizing compute cost, which is its own interesting topic).  Alternatively, you can fix it at 10%, which generally seems like a good number so far.
+ * An on ratio of around 5%; sometimes, for hard problems, you'll need to either turn on learning for this parameter, which gradually expands r_on towards 100% (because why not? The neuron can do better if it is on more often.  However, an interesting avenue of research is adding an L2 cost to this, which is equivalent to having SGD find an accurate solution while minimizing compute cost).  Alternatively, you can fix it at 10%, which generally seems like another good number so far.
  * A phase shift drawn from all possible phase shifts.  If you don't cover all phase shifts, or don't have enough neurons, you'll have "holes" in time where no neurons are paying attention.
  * The "timestamp" for a standard input is the integer time index, ranging from 0 to num_timesteps.
 
@@ -91,7 +94,7 @@ Please use this citation, if the code or paper was useful in your work:
 ```
 
 # Installation
-Requires Lasagne and Theano.  Other versions for e.g., TensorFlow, Keras, etc., will be linked in soon from the industrious community of brilliant ML programmers...
+Requires Lasagne and Theano.  Other versions will be linked as the industrious community of brilliant ML programmers ports the implementation...
 
 # Reach out to me!
 If you have any questions about this, please reach out to me at:
