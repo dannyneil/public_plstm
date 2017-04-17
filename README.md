@@ -9,7 +9,8 @@ If you're only answering bAbI tasks or doing negative log-likelihood on some par
 Making it work well for speech and NLP is still experimental and ongoing work.  If this is of interest to you, let me know and I can give you an update.
 
 ## Now available in TensorFlow and Keras!
- * Tensorflow implementation by Enea Ceolini can be found here: [https://github.com/Enny1991/PLSTM](https://github.com/Enny1991/PLSTM)
+ * **Official Tensorflow implementation now available** from Andrea Gesmundo at Google [https://github.com/tensorflow/tensorflow/blob/master/tensorflow/contrib/rnn/python/ops/rnn_cell.py#L1720-L1861](https://github.com/tensorflow/tensorflow/blob/master/tensorflow/contrib/rnn/python/ops/rnn_cell.py#L1720-L1861)
+ * Tensorflow implementation of the original experiment by Enea Ceolini can be found here: [https://github.com/Enny1991/PLSTM](https://github.com/Enny1991/PLSTM)
  * Keras implementation by Francesco Ferroni: [https://github.com/fferroni/PhasedLSTM-Keras](https://github.com/fferroni/PhasedLSTM-Keras)
 
 # Freq Task 1
