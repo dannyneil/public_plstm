@@ -11,6 +11,7 @@ Making it work well for speech and NLP is still experimental and ongoing work.  
 ## Now available in TensorFlow and Keras!
  * **Official Tensorflow implementation now available** from Andrea Gesmundo at Google [https://github.com/tensorflow/tensorflow/blob/master/tensorflow/contrib/rnn/python/ops/rnn_cell.py#L1720-L1861](https://github.com/tensorflow/tensorflow/blob/master/tensorflow/contrib/rnn/python/ops/rnn_cell.py#L1720-L1861)
  * Tensorflow implementation of the original experiment by Enea Ceolini can be found here: [https://github.com/Enny1991/PLSTM](https://github.com/Enny1991/PLSTM)
+ * Tensorflow implementation with MNIST example from Philippe Remy: [https://github.com/philipperemy/tensorflow-phased-lstm](https://github.com/philipperemy/tensorflow-phased-lstm)
  * Keras implementation by Francesco Ferroni: [https://github.com/fferroni/PhasedLSTM-Keras](https://github.com/fferroni/PhasedLSTM-Keras)
 
 # Freq Task 1
