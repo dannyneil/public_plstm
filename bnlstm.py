@@ -293,12 +293,12 @@ class LSTMWBNLayer(MergeLayer):
         if self.cell_init_incoming_index > 0:
             cell_init = inputs[self.cell_init_incoming_index]
 
+        if self.bn:            
+            input = self.bn.get_output_for(input)
+            
         # Treat all dimensions after the second as flattened feature dimensions
         if input.ndim > 3:
             input = T.flatten(input, 3)
-
-        if self.bn:
-            input = self.bn.get_output_for(input)
 
         # Because scan iterates over the first dimension we dimshuffle to
         # (n_time_steps, n_batch, n_features)
